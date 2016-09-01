@@ -119,7 +119,6 @@ do
          acc = acc or 0
          io.write(string.format(' | loss: %.5f | acc: %.5f', loss, acc))
 
-
          -- go back to center of bar, and print progress
          for i=1,37+#tm+barLength/2 do io.write('\b') end
          io.write(' ', current, '/', goal, ' ')
@@ -198,14 +197,14 @@ end
 -- automatically create new log when training begins.
 -- no specific log file needed.
 --
-function utils.addlog(...)
+function utils.log(content)
     paths.mkdir('log')
     -- get history logPath or create a new one named after the current time
-    logPath = logPath or './log/'..sys.fexecute('date +"%Y-%m-%d-%H-%M-%S"')
+    logPath = logPath or './log/'..os.date('%Y-%m-%d-%H-%M-%S')
     local f = io.open(logPath, 'a')
-    for _,v in pairs({...}) do
-        if type(v) == 'number' then v = ('%.4f'):format(v) end
-        f:write(v..'\t')
+    for _,v in pairs(content) do
+        if type(v) == 'number' then v = ('%.5f'):format(v) end
+        f:write(v..' \t')
     end
     f:write('\n')
     f:flush()
@@ -239,16 +238,6 @@ function utils.loadCheckpoint()
     local latestPath = './checkpoint/latest.t7'
     assert(paths.filep(latestPath), 'Latest checkpoint not exist!')
     return torch.load(latestPath)
-end
-
-----------------------------------------------------------------
--- merge table
---
-function utils.merge(A, B)
-    for k,v in pairs(B) do
-        A[k] = v
-    end
-    return A
 end
 
 return utils

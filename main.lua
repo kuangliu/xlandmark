@@ -1,9 +1,10 @@
-require 'torch'
+require 'pl'
 require 'nn'
 require 'nnx'
+require 'xlua'
+require 'torch'
 require 'optim'
 require 'image'
-require 'pl'
 require 'paths'
 
 utils = dofile('utils.lua')
@@ -12,15 +13,38 @@ xtorch = dofile('xtorch.lua')
 ------------------------------------------------
 -- 1. prepare data
 --
+dofile('./datagen/datagen.lua')
+dofile('./datagen/dataloader/listdataloader.lua')
 
-dofile('listdataset.lua')
-ds = ListDataset({
-    trainData = '/search/ssd/liukuang/celeba/train/',
-    trainList = '/search/ssd/liukuang/celeba/train.txt',
-    testData = '/search/ssd/liukuang/celeba/test/',
-    testList = '/search/ssd/liukuang/celeba/test.txt',
+trainloader = ListDataLoader({
+    directory = '/search/ssd/liukuang/celeba/train/',
+    list = '/search/ssd/liukuang/celeba/train.txt',
     imsize = 96
 })
+
+testloader = ListDataLoader({
+    directory = '/search/ssd/liukuang/celeba/test/',
+    list = '/search/ssd/liukuang/celeba/test.txt',
+    imsize = 96
+})
+
+traindata = DataGen({
+    dataloader=trainloader,
+    standardize=true
+})
+mean,std = traindata:getmeanstd()
+
+testdata = DataGen({
+    dataloader=testloader,
+    standardize={ mean=mean, std=std }
+})
+
+paths.mkdir('cache')
+torch.save('./cache/traindata.t7',traindata)
+torch.save('./cache/testdata.t7',testdata)
+-- traindata = torch.load('./cache/traindata.t7')
+-- testdata = torch.load('./cache/testdata.t7')
+
 ------------------------------------------------
 -- 2. define net
 --
@@ -42,8 +66,9 @@ opt = {
     ----------- net options --------------------
     net = net,
     ----------- data options -------------------
-    dataset = ds,
-    nhorse = 4,   -- nb of threads to load data, default 1
+    traindata = traindata,
+    testdata = testdata,
+    nhorse = 8  -- nb of threads to load data, default 1
     ----------- training options ---------------
     batchSize = 128,
     nEpoch = 500,
@@ -56,6 +81,7 @@ opt = {
     nGPU = 4,
     verbose = true
 }
+opt = xlua.envparams(opt)
 
 ------------------------------------------------
 -- 4. and fit!

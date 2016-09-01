@@ -54,18 +54,16 @@ function xtorch.init()
         cudnn.fastest = true
         cudnn.benchmark = true
 
-        -- insert data augment layers
-        local net_ = nn.Sequential()
-                    --   :add(nn.BatchFlip():float())
-                    --   :add(nn.RandomCrop(4, 'zero'):float())
-                      :add(nn.Copy('torch.FloatTensor', 'torch.CudaTensor'))
-
         if opt.nGPU == 1 then
             cutorch.setDevice(1)
         else
             net = utils.makeDataParallelTable(net, opt.nGPU)
         end
-        net_:add(net)
+
+        -- insert data casting layer
+        local net_ = nn.Sequential()
+                    :add(nn.Copy('torch.FloatTensor', 'torch.CudaTensor'))
+                    :add(net)
         net = net_
     end
 
@@ -90,9 +88,10 @@ function xtorch.initDataLoader()
             end,
             function(idx)
                 print('init thread '..idx)
-                dofile('listdataset.lua')
-                -- dofile('classdataset.lua')
-                -- dofile('plaindataset.lua')
+                dofile('datagen/datagen.lua')
+                -- dofile('datagen/dataloader/classdataloader.lua')
+                dofile('datagen/dataloader/listdataloader.lua')
+                -- dofile('datagen/dataloader/plaindataloader.lua')
             end
         )
     end
@@ -117,7 +116,7 @@ function xtorch.train()
     local nEpoch = opt.nEpoch
     local batchSize = opt.batchSize
     local optimState = opt.optimState
-    local dataset = opt.dataset
+    local dataset = opt.traindata
     local c = require 'trepl.colorize'
 
     -- epoch tracker
@@ -126,7 +125,7 @@ function xtorch.train()
 
     -- do one epoch
     trainLoss = 0
-    local epochSize = math.floor(dataset.ntrain/opt.batchSize)
+    local epochSize = math.floor(dataset.N/opt.batchSize)
     local bs = opt.batchSize
     for i = 1,epochSize do
         horses:addjob(
@@ -155,7 +154,7 @@ function xtorch.train()
                     trainLoss = trainLoss + f
 
                     -- display progress & loss
-                    utils.progress(i, epochSize, trainLoss/i)
+                    utils.progress(i, epochSize, f, trainLoss/i)
                     return f, gradParameters
                 end
                 opt.optimizer(feval, parameters, optimState)
@@ -166,6 +165,9 @@ function xtorch.train()
 
     horses:synchronize() -- wait all horses back
     xtorch.cudaSync()
+
+    -- cache for logging
+    trainLoss = trainLoss/epochSize
 end
 
 ----------------------------------------------------------------
@@ -175,8 +177,8 @@ function xtorch.test()
     xtorch.cudaSync()
     net:evaluate()
 
-    local dataset = opt.dataset
-    local epochSize = math.floor(dataset.ntest/opt.batchSize)
+    local dataset = opt.testdata
+    local epochSize = math.floor(dataset.N/opt.batchSize)
     local bs = opt.batchSize
 
     testLoss = 0
@@ -195,7 +197,7 @@ function xtorch.test()
                 testLoss = testLoss + f
 
                 -- display progress
-                utils.progress(i, epochSize, testLoss/i)
+                utils.progress(i, epochSize, f, testLoss/i)
                 xtorch.cudaSync()
             end
         )
@@ -204,11 +206,15 @@ function xtorch.test()
     horses:synchronize()
     xtorch.cudaSync()
 
+    -- logging
+    testLoss = testLoss/epochSize
+    utils.log{trainLoss, testLoss}
+
     -- save checkpoint
     bestAcc = bestAcc or math.huge
-    if testLoss/epochSize < bestAcc then
+    if testLoss < bestAcc then
         print('saving..')
-        bestAcc = testLoss/epochSize
+        bestAcc = testLoss
         utils.saveCheckpoint(net, epoch, optimState, bestAcc)
     end
 

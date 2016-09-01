@@ -13,17 +13,14 @@ local pathcat = paths.concat
 
 ---------------------------------------------------------------------------
 -- DataLoader takes:
---  - dataPath: a folder containing the images.
---  - listPath: a text file containing sample names & targets.
---  - imfunc: the image processing function
+--  - directory: directory containing the images.
+--  - list: a list ile containing sample names & targets.
 --
-function ListDataLoader:__init(dataPath, listPath, imfunc)
-    assert(paths.dirp(dataPath), dataPath..' not exist!')
-    assert(paths.filep(listPath), listPath..' not exist!')
-    self.dataPath = dataPath
-    self.listPath = listPath
-    -- set the default image processing function, just resize to loadsize
-    self.__imfunc = imfunc
+function ListDataLoader:__init(opt)
+    -- parse args
+    for k,v in pairs(opt) do self[k] = v end
+    assert(paths.dirp(self.directory), self.directory..' not exist!')
+    assert(paths.filep(self.list), self.list..' not exist!')
 
     self:__parseList()
 end
@@ -48,19 +45,18 @@ function ListDataLoader:__parseList()
     local maxNameLength = -1         -- max file name length
 
     -- get the number of files
-    local N = tonumber(sys.fexecute('ls '..self.dataPath..' | wc -l'))
-    self.nSamples = N
+    local N = tonumber(sys.fexecute('ls '..self.directory..' | wc -l'))
+    self.N = N
 
     local names = torch.CharTensor(N,constLength):fill(0)
     local targets
 
     -- parse names and targets line by line
     local name_data = names:data()
-    local f = assert(io.open(self.listPath, 'r'))
+    local f = assert(io.open(self.list, 'r'))
     for i = 1,N do
         xlua.progress(i,N)
         local line = f:read('*l')
-
         local splited = string.split(line, '%s+')
         ffi.copy(name_data, splited[1])    -- image name
         name_data = name_data + constLength
@@ -82,36 +78,21 @@ function ListDataLoader:__parseList()
     self.targets = targets
 end
 
---------------------------------------
+---------------------------------------------------------------------------
 -- load images from the given indices.
 --
 function ListDataLoader:__loadImages(indices)
     local quantity = indices:nElement()
-    local images
+    local images = torch.Tensor(quantity, 3, self.imsize, self.imsize)
     for i = 1,quantity do
         local name = ffi.string(self.names[indices[i]]:data())
-        local im = image.load(pathcat(self.dataPath, name))
-        -- hooker function performing like resizing, zero-mean, normalization
-        im = self.__imfunc(im)
-        images = images or torch.Tensor(quantity, 3, im:size(2), im:size(2))
-        images[i] = im
+        local im = image.load(pathcat(self.directory, name))
+        images[i] = image.scale(im, self.imsize, self.imsize)
     end
     return images
 end
 
----------------------------------------------------------
--- randomly sample quantity images from training dataset.
--- load samples maybe overlapped.
---
-function ListDataLoader:sample(quantity)
-    assert(quantity, '[ERROR] => No sample quantity specified!')
-    local indices = torch.LongTensor(quantity):random(self.nSamples)
-    local images  = self:__loadImages(indices)
-    local targets = self.targets:index(1,indices)
-    return images, targets
-end
-
-------------------------------------------------------------
+---------------------------------------------------------------------------
 -- return a batch specified by indices.
 --
 function ListDataLoader:loadBatchByIndex(indices)
@@ -120,7 +101,19 @@ function ListDataLoader:loadBatchByIndex(indices)
     return images, targets
 end
 
-------------------------------------------------
+---------------------------------------------------------------------------
+-- randomly sample quantity images from training dataset.
+-- load samples maybe overlapped.
+--
+function ListDataLoader:sample(quantity)
+    assert(quantity, '[ERROR] => No sample quantity specified!')
+    local indices = torch.LongTensor(quantity):random(self.N)
+    local images  = self:__loadImages(indices)
+    local targets = self.targets:index(1,indices)
+    return images, targets
+end
+
+---------------------------------------------------------------------------
 -- get images in the index range [i1, i2]
 -- used to load test samples.
 --
