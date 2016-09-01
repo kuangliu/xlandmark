@@ -8,12 +8,12 @@ TODO: dataset process
 
 ## model & training
 ### model
-The original model is from [VanillaCNN](https://github.com/ishay2b/VanillaCNN), with 2 modifications:
-1. Input size changed from `40x40` to `96x96`.
-2. FC layer output changed accordingly.
+The original model is from [VanillaCNN](https://github.com/ishay2b/VanillaCNN), with 2 modifications:  
+1. Input size changed from `40x40` to `96x96`.  
+2. FC layer output changed accordingly.  
 
 Modified model architecture:
-```lua
+```c
 nn.Sequential {
   [input -> (1) -> (2) -> output]
   (1): nn.Copy
@@ -48,7 +48,12 @@ nn.Sequential {
 [`xtorch`](https://github.com/kuangliu/xtorch) is used for data loading and training.  
 - `MSECriterion` is used instead of `CrossEntropyCriterion`.
 - `ConfusionMatrix` is removed for regression task.
-- `testLoss` is used as the standard to save best checkpoint.
+- `testLoss` is evaluated to pick the best checkpoint.
 
 ## iterative refinement
-TODO
+We adopt a very simple but effective iterative refinement policy. We feed the
+model with a face image, and get the landmark output. And we crop a new region out
+of the original image (often a rectangle 2x bigger), and we forward it again to
+get a new set of landmarks. The process is repeated for several times (like 3 times)
+till the coordinates converges.  
+Because our model is relatively simple, and the whole process can be finished under 50ms.
