@@ -2,15 +2,14 @@
 `xlandmark` is a facial landmark regression model with end-to-end training.  
 
 ## dataset
-`xlandmark` is trained on the [CelebA](http://mmlab.ie.cuhk.edu.hk/projects/CelebA.html) dataset, with 5 landmark (10 coordinates) outputs.  
-
-TODO: dataset process
+`xlandmark` is trained on the [CelebA](http://mmlab.ie.cuhk.edu.hk/projects/CelebA.html) dataset, with 5 landmark (10 coordinates) output.  
+For augmentation, we randomly crop the original dataset for 20 times, and get nearly 4 million images.  
 
 ## model & training
 ### model
 The original model is from [VanillaCNN](https://github.com/ishay2b/VanillaCNN), with 2 modifications:  
-1. Input size changed from `40x40` to `96x96`.  
-2. FC layer output changed accordingly.  
+- Input size changed from `40x40` to `96x96`.  
+- FC layer output changed accordingly.  
 
 Modified model architecture:
 ```c
@@ -45,15 +44,16 @@ nn.Sequential {
 ```
 
 ### training
-[`xtorch`](https://github.com/kuangliu/xtorch) is used for data loading and training.  
-- `MSECriterion` is used instead of `CrossEntropyCriterion`.
+[`xtorch`](https://github.com/kuangliu/xtorch) is used for data loading and training. Notice:  
+- `MSECriterion` is used for training instead of `CrossEntropyCriterion`.
 - `ConfusionMatrix` is removed for regression task.
 - `testLoss` is evaluated to pick the best checkpoint.
 
+The whole training process takes nearly a week on a 4 Nvidia Tesla K40c GPU server.
+
 ## iterative refinement
-We adopt a very simple but effective iterative refinement policy. We feed the
-model with a face image, and get the landmark output. And we crop a new region out
-of the original image (often a rectangle 2x bigger), and we forward it again to
-get a new set of landmarks. The process is repeated for several times (like 3 times)
-till the coordinates converges.  
-Because our model is relatively simple, and the whole process can be finished under 50ms.
+Regression model is sensitive to the inputs. Only when the input face region is similar (by similar I mean the size and the position) to the training samples, the output result should be accurate.  
+
+Thus, we adopt a very simple but effective **iterative refinement policy**. We feed the model with a face image, and get the landmark output. And we crop a new region out of the original image (often 2x of the landmark bounding box), and feed it again to get a new set of landmarks. This process is repeated for several times (like 3) till the coordinates converges.  
+
+Because our model is relatively simple, and the whole refinement process can be finished under 50ms.
