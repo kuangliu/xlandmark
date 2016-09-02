@@ -2,20 +2,19 @@
 -- test example with iterative refinement process.
 ------------------------------------------------------------------------
 
-require 'nn'
-require 'xlua'
-require 'image'
-require 'loadcaffe'
+require 'nn';
+require 'xlua';
+require 'image';
 
 function plotim(points, im, savename)
-    H,W,_ = unpack(canvas:size():totable())
+    H,W,_ = unpack(im:size():totable())
     for i = 1,5 do
         local x = math.ceil(points[2*i-1])
         local y = math.ceil(points[2*i])
         -- print(x,y)
-        canvas = image.drawRect(im, x, y, x+2, y+2, {lineWidth=2})
+        im = image.drawRect(im, x, y, x+2, y+2, {lineWidth=2})
     end
-    image.save('../12/'..savename, canvas)
+    image.save('./rlt/'..savename, im)
 end
 
 function forward(net, im)
@@ -64,14 +63,14 @@ function get2x(pts, im)
 end
 
 
-net = torch.load('./bestnn.t7')
+net = torch.load('./model/bestnn.t7')
 
-trainMean = torch.load('./trainMean.t7')
-trainStd = torch.load('./trainStd.t7')
+trainMean = torch.load('./model/trainMean.t7')
+trainStd = torch.load('./model/trainStd.t7')
 trainMean = image.scale(trainMean, 96, 96)
 trainStd = image.scale(trainStd, 96, 96)
 
-imPath = '/home/luke/testim/12/'
+imPath = '/mnt/hgfs/D/dataset/818/all/'
 
 for imName in paths.iterfiles(imPath) do
     print(imName)
@@ -99,4 +98,5 @@ for imName in paths.iterfiles(imPath) do
         y = forward(net, im2)
         plotim(y, im2, imName..'_'..tostring(i)..'.jpg')
     end
+    break
 end
